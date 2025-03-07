@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
-import { toast } from '@/components/ui/sonner';
+import { toast } from 'sonner';
 
 interface WalletState {
   address: string | null;

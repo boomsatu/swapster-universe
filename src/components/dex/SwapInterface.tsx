@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { TokenList } from "./TokenList";
 import { TOKENS, DEFAULT_SLIPPAGE } from "@/lib/constants";
 import { useWallet } from "@/hooks/useWallet";
-import { toast } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import { ArrowDownUp, Settings, Info } from "lucide-react";
 import {
   Tooltip,

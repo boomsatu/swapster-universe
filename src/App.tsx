@@ -13,11 +13,7 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-declare global {
-  interface Window {
-    ethereum?: any;
-  }
-}
+// Remove the global declaration since it's already in types.d.ts
 
 const App = () => {
   // Add listener for theme changes
