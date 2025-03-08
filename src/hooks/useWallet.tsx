@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { toast } from 'sonner'; // Fix import from sonner directly
+import { toast } from 'sonner';
 import { MetaMaskSDK } from '@metamask/sdk';
 import { useAccount, useConnect, useDisconnect, useNetwork, useSwitchNetwork } from 'wagmi';
 import { mainnet } from 'wagmi/chains';
@@ -23,6 +23,9 @@ const initialState: WalletState = {
 };
 
 let MMSDK: MetaMaskSDK | null = null;
+
+// BSC Testnet Chain ID
+const BSC_TESTNET_CHAIN_ID = 97;
 
 export function useWallet() {
   const [wallet, setWallet] = useState<WalletState>(initialState);
@@ -79,6 +82,12 @@ export function useWallet() {
       }
       
       toast.success('Wallet connected successfully!');
+      
+      // Check if on BSC Testnet, prompt to switch if not
+      if (chain && chain.id !== BSC_TESTNET_CHAIN_ID) {
+        toast.info('Please switch to BSC Testnet for optimal experience');
+        switchToNetwork(BSC_TESTNET_CHAIN_ID);
+      }
     } catch (error: any) {
       console.error('Error connecting wallet:', error);
       

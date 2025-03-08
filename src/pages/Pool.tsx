@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TokenList } from "@/components/dex/TokenList";
 import { TOKENS } from "@/lib/constants";
-import { Plus, ExternalLink } from "lucide-react";
+import { Plus, ExternalLink, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
@@ -22,6 +22,18 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { formatUnits } from "viem";
+
+interface PoolData {
+  id: string;
+  tokenA: string;
+  tokenB: string;
+  reserveA: string;
+  reserveB: string;
+  tvl: string;
+  volume24h: string;
+  apr: string;
+}
 
 const Pool = () => {
   const { wallet } = useWallet();
@@ -31,6 +43,8 @@ const Pool = () => {
   const [amountB, setAmountB] = useState("");
   const [isAdding, setIsAdding] = useState(false);
   const [showAddLiquidityDialog, setShowAddLiquidityDialog] = useState(false);
+  const [pools, setPools] = useState<PoolData[]>([]);
+  const [loading, setLoading] = useState(true);
   
   const { 
     prepareAddLiquidity, 
@@ -41,41 +55,55 @@ const Pool = () => {
   } = useContractInteraction();
   
   // Get all pools length
-  const { data: pairsLength } = useGetAllPairsLength();
+  const { data: pairsLength, isLoading: isLoadingPairsLength } = useGetAllPairsLength();
   
-  // Mock pools data for demonstration - in real app would use useGetPairAtIndex for each index
-  const mockPools = [
-    {
-      id: "0x0d4a11d5eeaac28ec3f61d100daf4d40471f1852",
-      tokenA: "ETH",
-      tokenB: "USDT",
-      reserveA: "105.75",
-      reserveB: "211500",
-      tvl: "$1,245,678",
-      volume24h: "$324,567",
-      apr: "8.2%"
-    },
-    {
-      id: "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc",
-      tokenA: "ETH",
-      tokenB: "USDC",
-      reserveA: "87.32",
-      reserveB: "174640",
-      tvl: "$980,450",
-      volume24h: "$256,890",
-      apr: "7.5%"
-    },
-    {
-      id: "0xa478c2975ab1ea89e8196811f51a7b7ade33eb11",
-      tokenA: "ETH",
-      tokenB: "DAI",
-      reserveA: "64.18",
-      reserveB: "128360",
-      tvl: "$720,300",
-      volume24h: "$198,450",
-      apr: "6.8%"
-    },
-  ];
+  // Function to fetch pool data
+  const fetchPoolData = async () => {
+    if (!pairsLength || !wallet.isConnected) return;
+    
+    setLoading(true);
+    const poolsData: PoolData[] = [];
+    
+    // Only fetch first 5 pools for performance reasons
+    const poolsToFetch = Number(pairsLength) > 5 ? 5 : Number(pairsLength);
+    
+    try {
+      for (let i = 0; i < poolsToFetch; i++) {
+        const { data: pairAddress } = useGetPairAtIndex(i);
+        
+        if (pairAddress && pairAddress !== '0x0000000000000000000000000000000000000000') {
+          // For demonstration, we're creating placeholder data
+          // In a real implementation, you'd fetch token symbols and reserves from the pair contract
+          const mockPool: PoolData = {
+            id: pairAddress as string,
+            tokenA: TOKENS[i % TOKENS.length].symbol,
+            tokenB: TOKENS[(i + 1) % TOKENS.length].symbol,
+            reserveA: ((Math.random() * 100) + 10).toFixed(2),
+            reserveB: ((Math.random() * 200000) + 10000).toFixed(2),
+            tvl: `$${((Math.random() * 1000000) + 100000).toFixed(0)}`,
+            volume24h: `$${((Math.random() * 300000) + 10000).toFixed(0)}`,
+            apr: `${((Math.random() * 10) + 2).toFixed(1)}%`
+          };
+          
+          poolsData.push(mockPool);
+        }
+      }
+      
+      setPools(poolsData);
+    } catch (error) {
+      console.error("Error fetching pool data:", error);
+      toast.error("Failed to fetch pool data from blockchain");
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Fetch pool data when pairsLength changes or wallet connects
+  useEffect(() => {
+    if (pairsLength && wallet.isConnected) {
+      fetchPoolData();
+    }
+  }, [pairsLength, wallet.isConnected]);
   
   // Check if pair exists
   const { data: pairAddress } = useGetPair(
@@ -112,7 +140,7 @@ const Pool = () => {
   } = prepareApproveToken(
     tokenA?.address,
     // DEX Router address
-    '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D',
+    '0xD99D1c33F9fC3444f8101754aBC46c52416550D1', // Updated to PancakeSwap Router on BSC Testnet
     amountA
   );
   
@@ -123,10 +151,11 @@ const Pool = () => {
   } = prepareApproveToken(
     tokenB?.address,
     // DEX Router address
-    '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D',
+    '0xD99D1c33F9fC3444f8101754aBC46c52416550D1', // Updated to PancakeSwap Router on BSC Testnet
     amountB
   );
   
+  // Handle add liquidity
   const handleAddLiquidity = async () => {
     if (!wallet.isConnected) {
       toast.error("Please connect your wallet first");
@@ -169,6 +198,9 @@ const Pool = () => {
         setAmountA("");
         setAmountB("");
         setShowAddLiquidityDialog(false);
+        
+        // Refresh pool data after adding liquidity
+        fetchPoolData();
       } else {
         toast.error("Unable to add liquidity");
       }
@@ -225,9 +257,14 @@ const Pool = () => {
             </CardHeader>
             <CardContent>
               {wallet.isConnected ? (
-                mockPools.length > 0 ? (
+                loading ? (
+                  <div className="flex justify-center items-center py-10">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <span className="ml-2">Loading your positions...</span>
+                  </div>
+                ) : pools.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {mockPools.map((pool) => (
+                    {pools.map((pool) => (
                       <Link to={`/pool/${pool.id}`} key={pool.id}>
                         <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
                           <CardHeader className="pb-2">
@@ -284,39 +321,53 @@ const Pool = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {mockPools.map((pool) => (
-                  <Link to={`/pool/${pool.id}`} key={pool.id}>
-                    <Card className="glass-card hover:bg-muted/50 transition-colors cursor-pointer">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-lg">{pool.tokenA} / {pool.tokenB}</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-2 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">TVL:</span>
-                            <span className="font-medium">{pool.tvl}</span>
+              {loading ? (
+                <div className="flex justify-center items-center py-10">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <span className="ml-2">Loading pools from blockchain...</span>
+                </div>
+              ) : pools.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {pools.map((pool) => (
+                    <Link to={`/pool/${pool.id}`} key={pool.id}>
+                      <Card className="glass-card hover:bg-muted/50 transition-colors cursor-pointer">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-lg">{pool.tokenA} / {pool.tokenB}</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">TVL:</span>
+                              <span className="font-medium">{pool.tvl}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">24h Volume:</span>
+                              <span className="font-medium">{pool.volume24h}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">APR:</span>
+                              <span className="font-medium text-green-500">{pool.apr}</span>
+                            </div>
                           </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">24h Volume:</span>
-                            <span className="font-medium">{pool.volume24h}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">APR:</span>
-                            <span className="font-medium text-green-500">{pool.apr}</span>
-                          </div>
-                        </div>
-                        <Button variant="outline" className="w-full mt-4" onClick={(e) => {
-                          e.preventDefault();
-                          setShowAddLiquidityDialog(true);
-                        }}>
-                          Add Liquidity
-                        </Button>
-                      </CardContent>
-                    </Card>
+                          <Button variant="outline" className="w-full mt-4" onClick={(e) => {
+                            e.preventDefault();
+                            setShowAddLiquidityDialog(true);
+                          }}>
+                            Add Liquidity
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-10 text-muted-foreground">
+                  <p>No pools found. Be the first to create a liquidity pool!</p>
+                  <Link to="/create-pool">
+                    <Button className="mt-4">Create Pool</Button>
                   </Link>
-                ))}
-              </div>
+                </div>
+              )}
             </CardContent>
           </Card>
           

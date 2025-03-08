@@ -1,5 +1,32 @@
-
 export const TOKENS = [
+  {
+    symbol: 'BNB',
+    name: 'Binance Coin',
+    address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE', // Represents native BNB
+    decimals: 18,
+    logoURI: 'https://assets.coingecko.com/coins/images/825/small/binance-coin-logo.png',
+  },
+  {
+    symbol: 'BUSD',
+    name: 'Binance USD',
+    address: '0xeD24FC36d5Ee211Ea25A80239Fb8C4Cfd80f12Ee', // BSC Testnet BUSD
+    decimals: 18,
+    logoURI: 'https://assets.coingecko.com/coins/images/9576/small/BUSD.png',
+  },
+  {
+    symbol: 'USDT',
+    name: 'Tether USD',
+    address: '0x337610d27c682E347C9cD60BD4b3b107C9d34dDd', // BSC Testnet USDT
+    decimals: 18,
+    logoURI: 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
+  },
+  {
+    symbol: 'CAKE',
+    name: 'PancakeSwap Token',
+    address: '0xFa60D973F7642B748046464e165A65B7323b0DEE', // BSC Testnet CAKE
+    decimals: 18,
+    logoURI: 'https://assets.coingecko.com/coins/images/12632/small/pancakeswap-cake-logo.png',
+  },
   {
     symbol: 'ETH',
     name: 'Ethereum',
@@ -67,17 +94,18 @@ export const NETWORKS = [
     blockExplorerUrl: 'https://bscscan.com',
   },
   {
-    id: 137,
-    name: 'Polygon',
-    symbol: 'MATIC',
-    rpcUrl: 'https://polygon-rpc.com',
-    blockExplorerUrl: 'https://polygonscan.com',
+    id: 97,
+    name: 'BSC Testnet',
+    symbol: 'BNB',
+    rpcUrl: 'https://data-seed-prebsc-1-s1.binance.org:8545/',
+    blockExplorerUrl: 'https://testnet.bscscan.com',
+    isTestnet: true,
   },
 ];
 
-// Mock contract addresses (to be replaced with actual addresses)
-export const DEX_ROUTER_ADDRESS = '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D'; // Uniswap V2 Router
-export const DEX_FACTORY_ADDRESS = '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f'; // Uniswap V2 Factory
+// Mock contract addresses replaced with PancakeSwap Testnet addresses
+export const DEX_ROUTER_ADDRESS = '0xD99D1c33F9fC3444f8101754aBC46c52416550D1'; // PancakeSwap Router V2 on BSC Testnet
+export const DEX_FACTORY_ADDRESS = '0x6725F303b657a9451d8BA641348b6761A6CC7a17'; // PancakeSwap Factory on BSC Testnet
 
 // Transaction settings
 export const DEFAULT_SLIPPAGE = 0.5; // 0.5%
