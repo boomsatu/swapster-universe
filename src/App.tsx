@@ -16,7 +16,7 @@ import PoolDetails from "./pages/PoolDetails";
 
 const queryClient = new QueryClient();
 
-// Remove the global declaration since it's already in types.d.ts
+// Use the global declaration from types.d.ts
 
 const App = () => {
   // Add listener for theme changes

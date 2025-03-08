@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,13 +47,13 @@ export function SwapInterface() {
     useGetTokenBalance 
   } = useContractInteraction();
   
-  // Get reserves for price calculation
-  const { data: reserves } = useGetReserves(
+  const { 
+    data: reserves 
+  } = useGetReserves(
     fromToken?.address, 
     toToken?.address
   );
   
-  // Get token balance
   const { data: fromTokenBalance } = useGetTokenBalance(
     fromToken?.address, 
     wallet.address || '0x'
@@ -65,7 +64,6 @@ export function SwapInterface() {
     wallet.address || '0x'
   );
   
-  // Prepare swap transaction
   const amountOutMin = parseFloat(toAmount) * (1 - slippage / 100);
   const { 
     swap, 
@@ -81,32 +79,27 @@ export function SwapInterface() {
     wallet.address || '0x'
   );
   
-  // Prepare token approval
   const { 
     approveToken, 
     isSuccess: approvalSuccess, 
     isLoading: approvalLoading 
   } = prepareApproveToken(
     fromToken?.address,
-    // DEX Router address
     '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D',
     fromAmount
   );
   
-  // When approval is successful, execute the swap
   useEffect(() => {
     if (approvalSuccess && needsApproval) {
       setNeedsApproval(false);
       toast.success("Token approved successfully!");
       
-      // Now execute the swap
       if (swap) {
         swap();
       }
     }
   }, [approvalSuccess, needsApproval, swap]);
   
-  // When swap is successful
   useEffect(() => {
     if (swapSuccess) {
       toast.success(`Swapped ${fromAmount} ${fromToken.symbol} for ${toAmount} ${toToken.symbol}`);
@@ -116,7 +109,6 @@ export function SwapInterface() {
     }
   }, [swapSuccess, fromAmount, toAmount, fromToken.symbol, toToken.symbol]);
   
-  // Handle errors
   useEffect(() => {
     if (swapError && swapErrorDetails) {
       console.error("Swap error:", swapErrorDetails);
@@ -130,33 +122,51 @@ export function SwapInterface() {
     if (value === "" || /^\d*\.?\d*$/.test(value)) {
       setFromAmount(value);
       
-      // Calculate to amount based on reserves
-      if (value && reserves) {
+      if (value && reserves && value !== "0" && value !== ".") {
         const [reserveFrom, reserveTo] = reserves as [bigint, bigint];
-        // Simple constant product formula: x * y = k
-        // y = k / x
-        const fromValue = parseFloat(value);
-        if (fromValue > 0 && reserveFrom > BigInt(0)) {
-          const k = reserveFrom * reserveTo;
-          const newX = reserveFrom + BigInt(Math.floor(fromValue * 10**18));
-          const newY = k / newX;
-          const diff = reserveTo - newY;
-          const calculatedToAmount = Number(diff) / 10**18;
-          
-          // Apply fee (0.3% typical DEX fee)
-          const withFee = calculatedToAmount * 0.997;
-          setToAmount(withFee.toFixed(6));
+        
+        if (reserveFrom > BigInt(0) && reserveTo > BigInt(0)) {
+          try {
+            const fromValue = parseFloat(value);
+            if (fromValue > 0) {
+              const k = reserveFrom * reserveTo;
+              const newX = reserveFrom + BigInt(Math.floor(fromValue * 10**18));
+              const newY = k / newX;
+              const diff = reserveTo - newY;
+              const calculatedToAmount = Number(diff) / 10**18;
+              
+              const withFee = calculatedToAmount * 0.997;
+              if (!isNaN(withFee)) {
+                setToAmount(withFee.toFixed(6));
+              } else {
+                setToAmount("");
+              }
+            } else {
+              setToAmount("");
+            }
+          } catch (error) {
+            console.error("Calculation error:", error);
+            setToAmount("");
+          }
         } else {
-          setToAmount("");
+          if (value && value !== "0" && value !== ".") {
+            try {
+              const calculatedToAmount = Number(value) * 2;
+              if (!isNaN(calculatedToAmount)) {
+                setToAmount(calculatedToAmount.toString());
+              } else {
+                setToAmount("");
+              }
+            } catch (error) {
+              console.error("Fallback calculation error:", error);
+              setToAmount("");
+            }
+          } else {
+            setToAmount("");
+          }
         }
       } else {
-        // Fallback to mock calculation if no reserves
-        if (value) {
-          const calculatedToAmount = Number(value) * 2;
-          setToAmount(calculatedToAmount.toString());
-        } else {
-          setToAmount("");
-        }
+        setToAmount("");
       }
     }
   };
@@ -166,33 +176,55 @@ export function SwapInterface() {
     if (value === "" || /^\d*\.?\d*$/.test(value)) {
       setToAmount(value);
       
-      // Calculate from amount based on reserves
-      if (value && reserves) {
+      if (value && reserves && value !== "0" && value !== ".") {
         const [reserveFrom, reserveTo] = reserves as [bigint, bigint];
-        // Simple constant product formula: x * y = k
-        // x = k / y
-        const toValue = parseFloat(value);
-        if (toValue > 0 && reserveTo > BigInt(0)) {
-          const k = reserveFrom * reserveTo;
-          const newY = reserveTo - BigInt(Math.floor(toValue * 10**18));
-          const newX = k / newY;
-          const diff = newX - reserveFrom;
-          const calculatedFromAmount = Number(diff) / 10**18;
-          
-          // Apply fee (0.3% typical DEX fee)
-          const withFee = calculatedFromAmount / 0.997;
-          setFromAmount(withFee.toFixed(6));
+        
+        if (reserveFrom > BigInt(0) && reserveTo > BigInt(0)) {
+          try {
+            const toValue = parseFloat(value);
+            if (toValue > 0) {
+              const k = reserveFrom * reserveTo;
+              const newY = reserveTo - BigInt(Math.floor(toValue * 10**18));
+              if (newY > BigInt(0)) {
+                const newX = k / newY;
+                const diff = newX - reserveFrom;
+                const calculatedFromAmount = Number(diff) / 10**18;
+                
+                const withFee = calculatedFromAmount / 0.997;
+                if (!isNaN(withFee)) {
+                  setFromAmount(withFee.toFixed(6));
+                } else {
+                  setFromAmount("");
+                }
+              } else {
+                setFromAmount("");
+              }
+            } else {
+              setFromAmount("");
+            }
+          } catch (error) {
+            console.error("Calculation error:", error);
+            setFromAmount("");
+          }
         } else {
-          setFromAmount("");
+          if (value) {
+            try {
+              const calculatedFromAmount = Number(value) / 2;
+              if (!isNaN(calculatedFromAmount)) {
+                setFromAmount(calculatedFromAmount.toString());
+              } else {
+                setFromAmount("");
+              }
+            } catch (error) {
+              console.error("Fallback calculation error:", error);
+              setFromAmount("");
+            }
+          } else {
+            setFromAmount("");
+          }
         }
       } else {
-        // Fallback to mock calculation if no reserves
-        if (value) {
-          const calculatedFromAmount = Number(value) / 2;
-          setFromAmount(calculatedFromAmount.toString());
-        } else {
-          setFromAmount("");
-        }
+        setFromAmount("");
       }
     }
   };
@@ -216,13 +248,22 @@ export function SwapInterface() {
       return;
     }
 
+    if (isNaN(parseFloat(fromAmount)) || parseFloat(fromAmount) <= 0) {
+      toast.error("Please enter a valid amount");
+      return;
+    }
+
+    const amountOutMin = parseFloat(toAmount) * (1 - slippage / 100);
+    if (isNaN(amountOutMin) || amountOutMin <= 0) {
+      toast.error("Invalid output amount calculation");
+      return;
+    }
+
     try {
       setIsSwapping(true);
       
-      // Check if tokens need approval first
       setNeedsApproval(true);
       
-      // First approve the token
       if (approveToken) {
         approveToken();
       } else {
@@ -230,8 +271,6 @@ export function SwapInterface() {
         setIsSwapping(false);
         return;
       }
-      
-      // The actual swap will be executed after approval in the useEffect
       
     } catch (error) {
       console.error("Swap error:", error);
@@ -242,7 +281,6 @@ export function SwapInterface() {
 
   const insufficientLiquidity = !reserves || reserves[0] === BigInt(0) || reserves[1] === BigInt(0);
   
-  // Calculate price impact
   const getPriceImpact = () => {
     if (!fromAmount || !toAmount || !reserves) return "0.00%";
     
@@ -251,22 +289,23 @@ export function SwapInterface() {
       const fromValue = parseFloat(fromAmount);
       
       if (fromValue > 0 && reserveFrom > BigInt(0) && reserveTo > BigInt(0)) {
-        // Current price
         const currentPrice = Number(reserveTo) / Number(reserveFrom);
         
-        // Expected output without impact
         const expectedOutput = fromValue * currentPrice;
         
-        // Actual output with impact
         const actualOutput = parseFloat(toAmount);
         
-        // Calculate impact
+        if (isNaN(expectedOutput) || isNaN(actualOutput) || expectedOutput === 0) {
+          return "0.00%";
+        }
+        
         const impact = (expectedOutput - actualOutput) / expectedOutput * 100;
         return impact > 0 ? impact.toFixed(2) + "%" : "0.00%";
       }
       
       return "0.00%";
     } catch (error) {
+      console.error("Price impact calculation error:", error);
       return "0.00%";
     }
   };

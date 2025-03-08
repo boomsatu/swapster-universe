@@ -1,6 +1,5 @@
 
 import { useContractRead, useContractWrite, usePrepareContractWrite } from 'wagmi';
-import { toast } from 'sonner';
 import { parseEther, parseUnits, formatUnits } from 'viem';
 import { DEX_ROUTER_ADDRESS, DEX_FACTORY_ADDRESS } from '@/lib/constants';
 
@@ -160,6 +159,22 @@ export function useContractInteraction() {
   ) => {
     const deadline = Math.floor(Date.now() / 1000) + 60 * 20; // 20 minutes from now
     
+    // Validate inputs before parsing to avoid NaN errors
+    const isValidAmount = (amount: string) => {
+      return amount && !isNaN(parseFloat(amount)) && parseFloat(amount) > 0;
+    };
+    
+    if (!isValidAmount(amountIn) || !isValidAmount(amountOutMin)) {
+      // Return a dummy config when inputs are invalid
+      return {
+        swap: undefined,
+        isSuccess: false,
+        isLoading: false,
+        isError: false,
+        error: null
+      };
+    }
+
     const { config } = usePrepareContractWrite({
       address: DEX_ROUTER_ADDRESS as `0x${string}`,
       abi: ROUTER_ABI,
@@ -171,6 +186,7 @@ export function useContractInteraction() {
         walletAddress, // Recipient
         BigInt(deadline) // Deadline
       ],
+      enabled: isValidAmount(amountIn) && isValidAmount(amountOutMin)
     });
     
     const { write: swap, isSuccess, isLoading, isError, error } = useContractWrite(config);
@@ -196,6 +212,22 @@ export function useContractInteraction() {
   ) => {
     const deadline = Math.floor(Date.now() / 1000) + 60 * 20; // 20 minutes from now
     
+    // Validate inputs
+    const isValidAmount = (amount: string) => {
+      return amount && !isNaN(parseFloat(amount)) && parseFloat(amount) > 0;
+    };
+    
+    if (!isValidAmount(amountA) || !isValidAmount(amountB) || 
+        !isValidAmount(amountAMin) || !isValidAmount(amountBMin)) {
+      return {
+        addLiquidity: undefined,
+        isSuccess: false,
+        isLoading: false,
+        isError: false,
+        error: null
+      };
+    }
+    
     const { config } = usePrepareContractWrite({
       address: DEX_ROUTER_ADDRESS as `0x${string}`,
       abi: ROUTER_ABI,
@@ -210,6 +242,8 @@ export function useContractInteraction() {
         walletAddress,
         BigInt(deadline)
       ],
+      enabled: isValidAmount(amountA) && isValidAmount(amountB) &&
+              isValidAmount(amountAMin) && isValidAmount(amountBMin)
     });
     
     const { write: addLiquidity, isSuccess, isLoading, isError, error } = useContractWrite(config);
@@ -234,6 +268,21 @@ export function useContractInteraction() {
   ) => {
     const deadline = Math.floor(Date.now() / 1000) + 60 * 20; // 20 minutes from now
     
+    // Validate inputs
+    const isValidAmount = (amount: string) => {
+      return amount && !isNaN(parseFloat(amount)) && parseFloat(amount) > 0;
+    };
+    
+    if (!isValidAmount(liquidity) || !isValidAmount(amountAMin) || !isValidAmount(amountBMin)) {
+      return {
+        removeLiquidity: undefined,
+        isSuccess: false,
+        isLoading: false,
+        isError: false,
+        error: null
+      };
+    }
+    
     const { config } = usePrepareContractWrite({
       address: DEX_ROUTER_ADDRESS as `0x${string}`,
       abi: ROUTER_ABI,
@@ -247,6 +296,7 @@ export function useContractInteraction() {
         walletAddress,
         BigInt(deadline)
       ],
+      enabled: isValidAmount(liquidity) && isValidAmount(amountAMin) && isValidAmount(amountBMin)
     });
     
     const { write: removeLiquidity, isSuccess, isLoading, isError, error } = useContractWrite(config);
@@ -320,11 +370,27 @@ export function useContractInteraction() {
   
   // Token approval
   const prepareApproveToken = (tokenAddress: string, spenderAddress: string, amount: string) => {
+    // Validate inputs
+    const isValidAmount = (amount: string) => {
+      return amount && !isNaN(parseFloat(amount)) && parseFloat(amount) > 0;
+    };
+    
+    if (!isValidAmount(amount)) {
+      return {
+        approveToken: undefined,
+        isSuccess: false,
+        isLoading: false,
+        isError: false,
+        error: null
+      };
+    }
+    
     const { config } = usePrepareContractWrite({
       address: tokenAddress as `0x${string}`,
       abi: ERC20_ABI,
       functionName: 'approve',
       args: [spenderAddress, parseUnits(amount, 18)],
+      enabled: isValidAmount(amount)
     });
     
     const { write: approveToken, isSuccess, isLoading, isError, error } = useContractWrite(config);

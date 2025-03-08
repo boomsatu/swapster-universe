@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { toast } from 'sonner';
+import { toast } from 'sonner'; // Fix import from sonner directly
 import { MetaMaskSDK } from '@metamask/sdk';
 import { useAccount, useConnect, useDisconnect, useNetwork, useSwitchNetwork } from 'wagmi';
 import { mainnet } from 'wagmi/chains';
