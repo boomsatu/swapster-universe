@@ -1,10 +1,11 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TokenList } from "./TokenList";
 import { TOKENS, DEFAULT_SLIPPAGE } from "@/lib/constants";
 import { useWallet } from "@/hooks/useWallet";
+import { useContractInteraction } from "@/hooks/useContractInteraction";
 import { toast } from "sonner";
 import { ArrowDownUp, Settings, Info } from "lucide-react";
 import {
@@ -38,17 +39,124 @@ export function SwapInterface() {
   const [toAmount, setToAmount] = useState("");
   const [slippage, setSlippage] = useState(DEFAULT_SLIPPAGE);
   const [isSwapping, setIsSwapping] = useState(false);
+  const [needsApproval, setNeedsApproval] = useState(false);
+  
+  const { 
+    prepareSwap, 
+    prepareApproveToken, 
+    useGetReserves, 
+    useGetTokenBalance 
+  } = useContractInteraction();
+  
+  // Get reserves for price calculation
+  const { data: reserves } = useGetReserves(
+    fromToken?.address, 
+    toToken?.address
+  );
+  
+  // Get token balance
+  const { data: fromTokenBalance } = useGetTokenBalance(
+    fromToken?.address, 
+    wallet.address || '0x'
+  );
+  
+  const { data: toTokenBalance } = useGetTokenBalance(
+    toToken?.address, 
+    wallet.address || '0x'
+  );
+  
+  // Prepare swap transaction
+  const amountOutMin = parseFloat(toAmount) * (1 - slippage / 100);
+  const { 
+    swap, 
+    isSuccess: swapSuccess, 
+    isLoading: swapLoading, 
+    isError: swapError,
+    error: swapErrorDetails 
+  } = prepareSwap(
+    fromToken?.address,
+    toToken?.address,
+    fromAmount,
+    amountOutMin.toString(),
+    wallet.address || '0x'
+  );
+  
+  // Prepare token approval
+  const { 
+    approveToken, 
+    isSuccess: approvalSuccess, 
+    isLoading: approvalLoading 
+  } = prepareApproveToken(
+    fromToken?.address,
+    // DEX Router address
+    '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D',
+    fromAmount
+  );
+  
+  // When approval is successful, execute the swap
+  useEffect(() => {
+    if (approvalSuccess && needsApproval) {
+      setNeedsApproval(false);
+      toast.success("Token approved successfully!");
+      
+      // Now execute the swap
+      if (swap) {
+        swap();
+      }
+    }
+  }, [approvalSuccess, needsApproval, swap]);
+  
+  // When swap is successful
+  useEffect(() => {
+    if (swapSuccess) {
+      toast.success(`Swapped ${fromAmount} ${fromToken.symbol} for ${toAmount} ${toToken.symbol}`);
+      setFromAmount("");
+      setToAmount("");
+      setIsSwapping(false);
+    }
+  }, [swapSuccess, fromAmount, toAmount, fromToken.symbol, toToken.symbol]);
+  
+  // Handle errors
+  useEffect(() => {
+    if (swapError && swapErrorDetails) {
+      console.error("Swap error:", swapErrorDetails);
+      toast.error("Failed to execute swap: " + swapErrorDetails.message);
+      setIsSwapping(false);
+    }
+  }, [swapError, swapErrorDetails]);
 
   const handleFromAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     if (value === "" || /^\d*\.?\d*$/.test(value)) {
       setFromAmount(value);
-      // Mocked price calculation (1:2 ratio for demonstration)
-      if (value) {
-        const calculatedToAmount = Number(value) * 2;
-        setToAmount(calculatedToAmount.toString());
+      
+      // Calculate to amount based on reserves
+      if (value && reserves) {
+        const [reserveFrom, reserveTo] = reserves as [bigint, bigint];
+        // Simple constant product formula: x * y = k
+        // y = k / x
+        const fromValue = parseFloat(value);
+        if (fromValue > 0 && reserveFrom > BigInt(0)) {
+          const k = reserveFrom * reserveTo;
+          const newX = reserveFrom + BigInt(Math.floor(fromValue * 10**18));
+          const newY = k / newX;
+          const diff = reserveTo - newY;
+          const calculatedToAmount = Number(diff) / 10**18;
+          
+          // Apply fee (0.3% typical DEX fee)
+          const withFee = calculatedToAmount * 0.997;
+          setToAmount(withFee.toFixed(6));
+        } else {
+          setToAmount("");
+        }
       } else {
-        setToAmount("");
+        // Fallback to mock calculation if no reserves
+        if (value) {
+          const calculatedToAmount = Number(value) * 2;
+          setToAmount(calculatedToAmount.toString());
+        } else {
+          setToAmount("");
+        }
       }
     }
   };
@@ -57,12 +165,34 @@ export function SwapInterface() {
     const value = e.target.value;
     if (value === "" || /^\d*\.?\d*$/.test(value)) {
       setToAmount(value);
-      // Mocked price calculation (1:2 ratio for demonstration)
-      if (value) {
-        const calculatedFromAmount = Number(value) / 2;
-        setFromAmount(calculatedFromAmount.toString());
+      
+      // Calculate from amount based on reserves
+      if (value && reserves) {
+        const [reserveFrom, reserveTo] = reserves as [bigint, bigint];
+        // Simple constant product formula: x * y = k
+        // x = k / y
+        const toValue = parseFloat(value);
+        if (toValue > 0 && reserveTo > BigInt(0)) {
+          const k = reserveFrom * reserveTo;
+          const newY = reserveTo - BigInt(Math.floor(toValue * 10**18));
+          const newX = k / newY;
+          const diff = newX - reserveFrom;
+          const calculatedFromAmount = Number(diff) / 10**18;
+          
+          // Apply fee (0.3% typical DEX fee)
+          const withFee = calculatedFromAmount / 0.997;
+          setFromAmount(withFee.toFixed(6));
+        } else {
+          setFromAmount("");
+        }
       } else {
-        setFromAmount("");
+        // Fallback to mock calculation if no reserves
+        if (value) {
+          const calculatedFromAmount = Number(value) / 2;
+          setFromAmount(calculatedFromAmount.toString());
+        } else {
+          setFromAmount("");
+        }
       }
     }
   };
@@ -88,22 +218,60 @@ export function SwapInterface() {
 
     try {
       setIsSwapping(true);
-      // Simulate API call/blockchain interaction
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      toast.success(`Swapped ${fromAmount} ${fromToken.symbol} for ${toAmount} ${toToken.symbol}`);
-      // Reset form after successful swap
-      setFromAmount("");
-      setToAmount("");
+      
+      // Check if tokens need approval first
+      setNeedsApproval(true);
+      
+      // First approve the token
+      if (approveToken) {
+        approveToken();
+      } else {
+        toast.error("Unable to prepare approval transaction");
+        setIsSwapping(false);
+        return;
+      }
+      
+      // The actual swap will be executed after approval in the useEffect
+      
     } catch (error) {
       console.error("Swap error:", error);
       toast.error("Failed to execute swap");
-    } finally {
       setIsSwapping(false);
     }
   };
 
-  const insufficientLiquidity = false; // Mock check
-  const priceImpact = "0.05%"; // Mock price impact
+  const insufficientLiquidity = !reserves || reserves[0] === BigInt(0) || reserves[1] === BigInt(0);
+  
+  // Calculate price impact
+  const getPriceImpact = () => {
+    if (!fromAmount || !toAmount || !reserves) return "0.00%";
+    
+    try {
+      const [reserveFrom, reserveTo] = reserves as [bigint, bigint];
+      const fromValue = parseFloat(fromAmount);
+      
+      if (fromValue > 0 && reserveFrom > BigInt(0) && reserveTo > BigInt(0)) {
+        // Current price
+        const currentPrice = Number(reserveTo) / Number(reserveFrom);
+        
+        // Expected output without impact
+        const expectedOutput = fromValue * currentPrice;
+        
+        // Actual output with impact
+        const actualOutput = parseFloat(toAmount);
+        
+        // Calculate impact
+        const impact = (expectedOutput - actualOutput) / expectedOutput * 100;
+        return impact > 0 ? impact.toFixed(2) + "%" : "0.00%";
+      }
+      
+      return "0.00%";
+    } catch (error) {
+      return "0.00%";
+    }
+  };
+  
+  const priceImpact = getPriceImpact();
 
   return (
     <Card className="glass-card w-full max-w-md mx-auto overflow-hidden animate-fade-in">
@@ -164,7 +332,9 @@ export function SwapInterface() {
             <label htmlFor="from-amount">From</label>
             {fromToken && wallet.isConnected && (
               <span className="text-muted-foreground">
-                Balance: <span className="font-medium">0.00</span>
+                Balance: <span className="font-medium">
+                  {fromTokenBalance ? (Number(fromTokenBalance) / 10**fromToken.decimals).toFixed(4) : "0.00"}
+                </span>
               </span>
             )}
           </div>
@@ -180,7 +350,13 @@ export function SwapInterface() {
               <Button
                 variant="ghost"
                 className="absolute right-1 top-1 h-10 px-2 font-medium text-xs"
-                onClick={() => setFromAmount("0.0")} // Ideally set to max balance
+                onClick={() => {
+                  if (fromTokenBalance) {
+                    const maxBalance = (Number(fromTokenBalance) / 10**fromToken.decimals).toString();
+                    setFromAmount(maxBalance);
+                    handleFromAmountChange({ target: { value: maxBalance } } as React.ChangeEvent<HTMLInputElement>);
+                  }
+                }}
               >
                 MAX
               </Button>
@@ -209,7 +385,9 @@ export function SwapInterface() {
             <label htmlFor="to-amount">To</label>
             {toToken && wallet.isConnected && (
               <span className="text-muted-foreground">
-                Balance: <span className="font-medium">0.00</span>
+                Balance: <span className="font-medium">
+                  {toTokenBalance ? (Number(toTokenBalance) / 10**toToken.decimals).toFixed(4) : "0.00"}
+                </span>
               </span>
             )}
           </div>
@@ -234,12 +412,17 @@ export function SwapInterface() {
             <div className="flex justify-between mb-1">
               <span>Rate</span>
               <span className="font-medium">
-                1 {fromToken.symbol} = {2} {toToken.symbol}
+                1 {fromToken.symbol} = {(parseFloat(toAmount) / parseFloat(fromAmount)).toFixed(6)} {toToken.symbol}
               </span>
             </div>
             <div className="flex justify-between">
               <span>Price Impact</span>
-              <span className="font-medium text-green-500">{priceImpact}</span>
+              <span className={`font-medium ${
+                parseFloat(priceImpact) > 3 ? "text-orange-500" : 
+                parseFloat(priceImpact) > 1 ? "text-yellow-500" : "text-green-500"
+              }`}>
+                {priceImpact}
+              </span>
             </div>
           </div>
         )}
@@ -257,13 +440,17 @@ export function SwapInterface() {
           <Button className="w-full h-12" disabled>
             Enter an amount
           </Button>
+        ) : isSwapping || approvalLoading || swapLoading ? (
+          <Button className="w-full h-12" disabled>
+            {needsApproval ? "Approving..." : "Swapping..."}
+          </Button>
         ) : (
           <Button
             className="w-full h-12 font-semibold text-base"
             onClick={handleSwap}
             disabled={isSwapping}
           >
-            {isSwapping ? "Swapping..." : "Swap"}
+            Swap
           </Button>
         )}
       </CardFooter>
