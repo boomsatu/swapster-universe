@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { Navbar } from "@/components/layout/Navbar";
@@ -12,6 +11,7 @@ import { AlertCircle, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { formatUnits } from "viem";
+import { useContractRead } from "wagmi";
 
 // ABI for PancakeSwap Pair contract
 const PAIR_ABI = [
@@ -109,7 +109,48 @@ const PoolDetails = () => {
   const [poolData, setPoolData] = useState<PoolData | null>(null);
   const [loading, setLoading] = useState(true);
   
-  const { prepareRemoveLiquidity, useContractRead } = useContractInteraction();
+  const { prepareRemoveLiquidity } = useContractInteraction();
+  
+  // Read token0 address from pair contract
+  const { data: token0Address } = useContractRead({
+    address: pairAddress as `0x${string}`,
+    abi: PAIR_ABI,
+    functionName: 'token0',
+    enabled: !!pairAddress
+  });
+  
+  // Read token1 address from pair contract
+  const { data: token1Address } = useContractRead({
+    address: pairAddress as `0x${string}`,
+    abi: PAIR_ABI,
+    functionName: 'token1',
+    enabled: !!pairAddress
+  });
+  
+  // Read reserves from pair contract
+  const { data: reserves } = useContractRead({
+    address: pairAddress as `0x${string}`,
+    abi: PAIR_ABI,
+    functionName: 'getReserves',
+    enabled: !!pairAddress
+  });
+  
+  // Read total supply from pair contract
+  const { data: totalSupply } = useContractRead({
+    address: pairAddress as `0x${string}`,
+    abi: PAIR_ABI,
+    functionName: 'totalSupply',
+    enabled: !!pairAddress
+  });
+  
+  // Read LP token balance for the current user
+  const { data: lpBalance } = useContractRead({
+    address: pairAddress as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: [wallet.address as `0x${string}`],
+    enabled: !!pairAddress && !!wallet.address
+  });
   
   // Fetch pool data from smart contract
   useEffect(() => {
